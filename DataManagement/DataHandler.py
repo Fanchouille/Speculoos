@@ -67,14 +67,18 @@ class DataHandler:
                         iToDate.day,
                         iToDate.year,))
         # print lUrl
-        lS = requests.get(lUrl).text
-        oDf = pd.read_csv(StringIO(lS))
-        if oDf.shape[0] > 0:
-            oDf.loc[:, 'Stock'] = iStockSymbol
-            oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
-            oDf.sort_values('Date', inplace=True)
-            return oDf.loc[:, ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
-        else:
+        r = requests.get(lUrl)
+        if r.status_code == 200:
+            lS = r.text
+            oDf = pd.read_csv(StringIO(lS))
+            if oDf.shape[0] > 0:
+                oDf.loc[:, 'Stock'] = iStockSymbol
+                oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+                oDf.sort_values('Date', inplace=True)
+                return oDf.loc[:, ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+            else:
+                return None
+        elif r.status_code == 404:
             return None
 
     def save_stock_data(self, iStockSymbol):
@@ -92,7 +96,7 @@ class DataHandler:
                 lDf.to_csv(self.Paths['DataPath'] + iStockSymbol + '/' + iStockSymbol + '_' + max_date.strftime(
                     format='%Y-%m-%d') + '.csv', index=False, sep=';')
                 logging.info(
-                    'File already exists : Historical data for stock ' + iStockSymbol + ' was saved.')
+                    'Historical data for stock ' + iStockSymbol + ' was saved.')
             else:
                 logging.warning(
                     'Historical data for stock ' + iStockSymbol + ' was not saved : data was not found.')
@@ -129,29 +133,94 @@ class DataHandler:
             return
 
     def save_all_stocks(self, iSleepRange=None):
+        """
+
+        :param iSleepRange: min / max in sec to sleep between each call
+        :return:
+        """
+        i = 1
         if iSleepRange is not None:
             for stock in self.Params['stocklist']:
+                # print ('Pct completed : %s') % str(100.0*i/float(len(self.Params['stocklist'])))
+                pct = 100.0 * i / float(len(self.Params['stocklist']))
+                print 'MAJ of stock data... [%f%%]\r' % pct
                 logging.info('Try to fetch stock data for : ' + stock)
-                sleep = random.randint(iSleepRange[0], iSleepRange[1])
-                logging.info('Now sleeping for : %s seconds.' % (sleep,))
-                # Sleeps btw iSleepRange not to get tracked by Yahoo!
-                time.sleep(sleep)
-                self.save_stock_data(stock)
+                # Don't sleep if data is already up to date
+                if self.is_up_to_date(stock):
+                    self.save_stock_data(stock)
+                else:
+                    sleep = random.randint(iSleepRange[0], iSleepRange[1])
+                    logging.info('Now sleeping for : %s seconds.' % (sleep,))
+                    # Sleeps btw iSleepRange not to get tracked by Yahoo!
+                    time.sleep(sleep)
+                    self.save_stock_data(stock)
+                logging.info(
+                    'Data for stock ' + stock + ' whole consistency = ' + str(self.check_consistency(stock)))
+                logging.info(
+                    'Data for stock ' + stock + ' consistency since 2015 = ' + str(
+                        self.check_consistency(stock, '2015-01-01')))
+                i += 1
         else:
             for stock in self.Params['stocklist']:
+                pct = 100.0 * i / float(len(self.Params['stocklist']))
+                print 'MAJ of stock data... [%f%%]\r' % pct
+                # print str(100.0*i/float(len(self.Params['stocklist'])))
                 logging.info('Try to fetch stock data for : ' + stock)
                 self.save_stock_data(stock)
+                logging.info(
+                    'Data for stock ' + stock + ' whole consistency = ' + str(self.check_consistency(stock)))
+                logging.info(
+                    'Data for stock ' + stock + ' consistency since 2015= ' + str(
+                        self.check_consistency(stock, '2015-01-01')))
+                i += 1
         return
 
-    def check_consistency(self, iStockSymbol):
+    def check_consistency(self, iStockSymbol, iFromDate=None):
+        """
+
+        :param iStockSymbol: Stock symbol
+        :param iFromDate: filter on date
+        :return: consistency of DF :
+        """
         if os.path.exists(self.Paths['DataPath'] + iStockSymbol + '/'):
             file_list = glob.glob(self.Paths['DataPath'] + iStockSymbol + '/*.csv')
             if len(file_list) == 1:
                 df = pd.read_csv(file_list[0], header=0, sep=';')
                 df.loc[:, 'Date'] = pd.to_datetime(df.loc[:, 'Date'], format='%Y-%m-%d')
+                df.drop_duplicates(inplace=True)
+                if iFromDate is not None:
+                    if df['Date'].max() >= pd.to_datetime(iFromDate, format='%Y-%m-%d'):
+                        df = df[df['Date'] >= pd.to_datetime(iFromDate, format='%Y-%m-%d')].copy()
+                    else:
+                        return 0.0
                 calendar_df = pd.DataFrame(pd.date_range(df.loc[:, 'Date'].min(), df.loc[:, 'Date'].max(), freq='D'),
-                                   columns=['FullDate'])
+                                           columns=['FullDate'])
                 calendar_df.loc[:, 'DayOfWeek'] = calendar_df.loc[:, 'FullDate'].dt.dayofweek
-                num_days = calendar_df[calendar_df['DayOfWeek'] < 5].shape[0]
-                return df.shape[0]/float(num_days)
+                df.loc[:, 'DayOfWeek'] = df.loc[:, 'Date'].dt.dayofweek
+                num_days_cal = calendar_df[calendar_df['DayOfWeek'] < 5].shape[0]
+                num_days_df = df[df['DayOfWeek'] < 5].shape[0]
+                return num_days_df / float(num_days_cal)
         return 0.0
+
+    def is_up_to_date(self, iStockSymbol):
+        """
+
+        :param iStockSymbol: Stock Symbol
+        :return: True if data is up-to-date
+        """
+        if os.path.exists(self.Paths['DataPath'] + iStockSymbol + '/'):
+            file_list = glob.glob(self.Paths['DataPath'] + iStockSymbol + '/*.csv')
+            if len(file_list) == 1:
+                file_name = file_list[0].replace(self.Paths['DataPath'] + iStockSymbol + '/', '')
+                # Get last maj date (from filename)
+                date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
+                                               format='%Y-%m-%d').date()
+                # if last available data was not yesterday
+                if (dt.date.today() - date_last_maj).days <= 1:
+                    return True
+        return False
+
+    def is_usable(self, iStockSymbol, iFromDate):
+        if self.is_up_to_date(iStockSymbol) & (self.check_consistency(iStockSymbol, iFromDate) == 1.0):
+            return True
+        return False
