@@ -18,7 +18,7 @@ formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 
 class DataHandler:
     """
-    Params_MagInt = {'homepath': '/Users/fanch/Desktop/Titres/', 'stocklist : []'}
+    iParamsDict = {'homepath': '/Users/fanch/Desktop/Titres/', 'stocklist : []'}
     """
 
     def __init__(self, iParamsDict):
@@ -215,8 +215,9 @@ class DataHandler:
                 # Get last maj date (from filename)
                 date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
                                                format='%Y-%m-%d').date()
-                # if last available data was not yesterday
-                if (dt.date.today() - date_last_maj).days <= 1:
+                # if last available data was not yesterday or if today is monday and last available data is last friday
+                if ((dt.date.today() - date_last_maj).days <= 1) | ((dt.date.today().weekday() == 0) & (
+                            (dt.date.today() - date_last_maj).days == 3)):
                     return True
         return False
 

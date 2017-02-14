@@ -13,6 +13,3 @@ PARAMS = {'homepath': '/Users/fanch/Desktop/Titres', 'stocklist': stocklist}
 handData = datHand.DataHandler(PARAMS)
 handData.save_all_stocks(iSleepRange=(1, 3))
 
-
-# print handData.is_usable('SLB.PA', '2015-01-01')
-# print handData.is_usable('AF.PA', '2015-01-01')
