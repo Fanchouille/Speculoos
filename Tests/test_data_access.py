@@ -1,4 +1,4 @@
-from DataManagement import DataHandler as datHand
+from DataManagement import DataHandler
 import pandas as pd
 
 # .PA means PARIS STOCK EXCHANGE
@@ -7,9 +7,13 @@ stocklist_df = pd.read_csv('/Users/fanch/Desktop/Titres/eurolist_nom.csv', heade
 
 # Params to get data
 stocklist = stocklist_df[stocklist_df['EUROLIST'] == 'A'].loc[:, 'StockSymbol'].unique()
-PARAMS = {'homepath': '/Users/fanch/Desktop/Titres', 'stocklist': stocklist}
+PARAMS = {'homepath': '/Users/fanch/Desktop/Titres',
+          'stocklist': stocklist,
+          # 'stockparams':
+          #    {'SGO.PA': {'features': {'pattern': None}}}
+          }
 
-# Get data
-handData = datHand.DataHandler(PARAMS)
-handData.save_all_stocks(iSleepRange=(1, 3))
+# Launch Run manager
+datHand = DataHandler.DataHandler(PARAMS)
 
+datHand.save_all_stocks(iSleepRange=(2, 5))

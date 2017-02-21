@@ -110,12 +110,13 @@ class DataHandler:
                 date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
                                                format='%Y-%m-%d').date()
                 # if last available data was not yesterday
-                if (dt.date.today() - date_last_maj).days > 1:
+                if (((dt.date.today() - date_last_maj).days > 1) & (dt.date.today().weekday() > 0)) | (
+                    (dt.date.today().weekday() == 0) & (
+                            (dt.date.today() - date_last_maj).days > 3)):
                     # get last available data
                     lDf = self.download_stock_data(iStockSymbol, date_last_maj + dt.timedelta(days=1), dt.date.today())
                     if lDf is not None:
-                        # append last data to histo file
-                        # with open(self.Paths['DataPath'] + iStockSymbol + '/' + file_name, 'a') as f:
+                        # append last data to histo file (mode = 'a')
                         max_date = lDf.loc[:, 'Date'].max()
                         lDf.to_csv(self.Paths['DataPath'] + iStockSymbol + '/' + file_name, mode='a', header=False,
                                    index=False, sep=';')
@@ -225,3 +226,20 @@ class DataHandler:
         if self.is_up_to_date(iStockSymbol) & (self.check_consistency(iStockSymbol, iFromDate) == 1.0):
             return True
         return False
+
+    def get_data(self, iStockSymbol):
+        file_list = glob.glob(self.Paths['DataPath'] + iStockSymbol + '/*.csv')
+        # We must have only one file
+        if len(file_list) == 1:
+            df = pd.read_csv(file_list[0], header=0, sep=';')
+            df.drop_duplicates(inplace=True)
+            df.loc[:, 'Date'] = pd.to_datetime(df.loc[:, 'Date'], format='%Y-%m-%d')
+            df.loc[:, 'Volume'] = df.loc[:, 'Volume'].astype(float)
+            logging.info('Data for stock ' + iStockSymbol + ' and date >= ' + df['Date'].min().strftime(
+                format='%Y-%m-%d') + ' returned.')
+            df.columns = [s.lower() for s in df.columns]
+        else:
+            logging.warning('Multiple data files for stock ' + iStockSymbol + ' were found. Please Check.')
+            return None
+
+        return df
