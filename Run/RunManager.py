@@ -301,7 +301,7 @@ class RunManager:
         current_day = dt.date.today()
 
         # Save stock data
-        # self.DataHand.save_all_stocks(iSleepRange)
+        self.DataHand.save_all_stocks(iSleepRange)
 
         # Train models if needed
         self.train_and_save_models(iTrainingFromDate, iRetrain)
