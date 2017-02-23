@@ -119,7 +119,7 @@ class RunManager:
         logging.info('*' * 50)
         logging.info('Train model for stock ' + iStockSymbol + ' : ')
 
-        if (not os.path.exists(self.Paths['ModelsPath'] + iStockSymbol + '/')) | (iRetrain):
+        if ((not os.path.exists(self.Paths['ModelsPath'] + iStockSymbol + '/')) | (iRetrain)):
 
             if self.DataHand.is_usable(iStockSymbol, iFromDate):
                 # Get data if usable
@@ -174,16 +174,16 @@ class RunManager:
         logging.info('Models for stock ' + iStockSymbol + ' were saved.')
         return
 
-    def train_and_save_models_on_stock(self, iStockSymbol, iFromDate=None):
-        fitted_models = self.train_models_on_stock_data(iStockSymbol, iFromDate=iFromDate)
+    def train_and_save_models_on_stock(self, iStockSymbol, iFromDate=None, iRetrain=False):
+        fitted_models = self.train_models_on_stock_data(iStockSymbol, iFromDate=iFromDate, iRetrain=iRetrain)
         if fitted_models is not None:
             self.save_fitted_models(fitted_models, iStockSymbol)
         return
 
-    def train_and_save_models(self, iFromDate=None):
+    def train_and_save_models(self, iFromDate=None, iRetrain=False):
         for stock in self.Params['stocklist']:
             # logging.info('Training model for STOCK : ' + stock)
-            self.train_and_save_models_on_stock(stock, iFromDate)
+            self.train_and_save_models_on_stock(stock, iFromDate, iRetrain)
         return
 
     def load_stock_models(self, iStockSymbol, iDate=None):
@@ -287,7 +287,7 @@ class RunManager:
         else:
             return None
 
-    def daily_run(self, iSleepRange, iFromDate=None, iModelDate=None):
+    def daily_run(self, iSleepRange, iTrainingFromDate=None, iModelDate=None, iRetrain=False):
         """
 
         :param iSleepRange:
@@ -301,14 +301,21 @@ class RunManager:
         current_day = dt.date.today()
 
         # Save stock data
-        self.DataHand.save_all_stocks(iSleepRange)
+        # self.DataHand.save_all_stocks(iSleepRange)
+
+        # Train models if needed
+        self.train_and_save_models(iTrainingFromDate, iRetrain)
 
         # Check last predictions
         last_pred = self.get_last_predictions_on_stocklist()
         if last_pred is not None:
             num_days = (current_day - last_pred).days
+            if num_days == 0:
+                num_days = 1
         else:
             num_days = 1
+
+        iFromDate = (current_day - dt.timedelta(days=num_days)).strftime(format='%Y-%m-%d')
 
         # Compute predictions for days not since last prediction
         self.save_predictions_on_stocklist(iFromDate, iModelDate, iNumDays=num_days)

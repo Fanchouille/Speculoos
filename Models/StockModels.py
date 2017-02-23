@@ -6,7 +6,6 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.externals import joblib
 from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import StandardScaler
@@ -75,7 +74,7 @@ def create_models(iTargets, iScoring='f1_weighted', iNumFolds=3, iPolyDeg=[1], i
     for target in iTargets:
         grid_gbr = GridSearchCV(pipe_gbr,
                                 param_grid=params_gbr,
-                                cv=TimeSeriesSplit(iNumFolds),
+                                cv=iNumFolds,
                                 scoring=iScoring,
                                 iid=False,
                                 n_jobs=-1,
@@ -85,7 +84,7 @@ def create_models(iTargets, iScoring='f1_weighted', iNumFolds=3, iPolyDeg=[1], i
 
         grid_rf = GridSearchCV(pipe_rf,
                                param_grid=params_rf,
-                               cv=TimeSeriesSplit(iNumFolds),
+                               cv=iNumFolds,
                                scoring=iScoring,
                                iid=False,
                                n_jobs=-1,
@@ -106,11 +105,15 @@ def fit_models(iModelDict, iDf, features, targets):
     :return:
     """
     oFittedModelsDict = {}
+    print targets
     for target in targets:
-        oFittedModelsDict[target + '_gbr'] = iModelDict[target + '_gbr'].fit(iDf.loc[:, features].values,
-                                                                             iDf.loc[:, target].values)
-        oFittedModelsDict[target + '_rf'] = iModelDict[target + '_rf'].fit(iDf.loc[:, features].values,
-                                                                           iDf.loc[:, target].values)
+        print target
+        print iDf.loc[:, target].value_counts().shape[0]
+        if iDf.loc[:, target].value_counts().shape[0] > 1:
+            oFittedModelsDict[target + '_gbr'] = iModelDict[target + '_gbr'].fit(iDf.loc[:, features].values,
+                                                                                 iDf.loc[:, target].values)
+            oFittedModelsDict[target + '_rf'] = iModelDict[target + '_rf'].fit(iDf.loc[:, features].values,
+                                                                               iDf.loc[:, target].values)
     return oFittedModelsDict
 
 

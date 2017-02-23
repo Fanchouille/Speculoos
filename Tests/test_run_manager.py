@@ -28,4 +28,4 @@ runM = RunManag.RunManager(PARAMS)
 # runDate = '2017-01-01'
 # runM.get_predictions_on_stocklist(runDate).to_csv(PARAMS['homepath']+'/results_'+runDate+'.csv', sep=';', index=False)
 
-runM.daily_run(iSleepRange=(2, 5), iFromDate='2017-01-01')
+runM.daily_run(iSleepRange=(2, 5), iTrainingFromDate='2015-01-01', iRetrain=False)
