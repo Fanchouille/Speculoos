@@ -22,7 +22,9 @@ def get_all_paths(iHomePath):
     logsPath = iHomePath + '/Logs/'
     modelsPath = iHomePath + '/Models/'
     resultsPath = iHomePath + '/Results/'
-    Paths = {'DataPath': dataPath, 'LogsPath': logsPath, 'ModelsPath': modelsPath, 'ResultsPath': resultsPath}
+    pfPath = iHomePath + '/Portfolio/'
+    Paths = {'DataPath': dataPath, 'LogsPath': logsPath, 'ModelsPath': modelsPath, 'ResultsPath': resultsPath,
+             'PFPath': pfPath}
     return Paths
 
 

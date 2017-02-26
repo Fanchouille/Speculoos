@@ -252,9 +252,10 @@ class RunManager:
                 logging.info('Prediction for stock ' + stock + ' computed.')
             else:
                 logging.warning('Prediction for stock ' + stock + ' NOT computed. Please check.')
-
-        oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date'] + targets_final]
-
+        if len(results_per_stock) > 0:
+            oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date', 'close'] + targets_final]
+        else:
+            return None
         # Filter out rows with all targets at 0
         oDf = oDf[oDf[targets_final].values.sum(axis=1) != 0]
 
@@ -262,7 +263,7 @@ class RunManager:
             logging.warning('No move to do today.')
             return None
         else:
-            return oDf
+            return oDf.dropna()
 
     def save_predictions_on_stocklist(self, iFromDate=None, iModelDate=None, iNumDays=1):
         self.create_results_path()

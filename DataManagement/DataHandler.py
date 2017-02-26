@@ -110,9 +110,9 @@ class DataHandler:
                 date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
                                                format='%Y-%m-%d').date()
                 # if last available data was not yesterday
-                if (((dt.date.today() - date_last_maj).days > 1) & (dt.date.today().weekday() > 0)) | (
-                    (dt.date.today().weekday() == 0) & (
-                            (dt.date.today() - date_last_maj).days > 3)):
+                if (((dt.date.today() - date_last_maj).days > 1) & (dt.date.today().weekday() <= 4)) | (
+                            (date_last_maj.weekday() == 4) & (
+                                    (dt.date.today() - date_last_maj).days > 3)):
                     # get last available data
                     lDf = self.download_stock_data(iStockSymbol, date_last_maj + dt.timedelta(days=1), dt.date.today())
                     if lDf is not None:
@@ -217,8 +217,8 @@ class DataHandler:
                 date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
                                                format='%Y-%m-%d').date()
                 # if last available data was not yesterday or if today is monday and last available data is last friday
-                if ((dt.date.today() - date_last_maj).days <= 1) | ((dt.date.today().weekday() == 0) & (
-                            (dt.date.today() - date_last_maj).days == 3)):
+                if ((dt.date.today() - date_last_maj).days <= 1) | ((date_last_maj.weekday() == 4) & (
+                            (dt.date.today() - date_last_maj).days <= 3)):
                     return True
         return False
 
@@ -243,3 +243,49 @@ class DataHandler:
             return None
 
         return df
+
+    def get_moves_histo(self):
+        file_list = glob.glob(self.Paths['PFPath'] + 'Movements/' + '*.csv')
+        if len(file_list) == 1:
+            oDf = pd.read_csv(file_list[0], header=0, sep=';')
+            oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+
+        else:
+            logging.warning('No moves histo was found. Please Check.')
+            return None
+        return oDf.sort_values(['date', 'stock'], ascending=[1, 1])
+
+    def get_portfolio(self):
+        file_list = glob.glob(self.Paths['PFPath'] + 'PF/' + '*.csv')
+        if len(file_list) == 1:
+            oDf = pd.read_csv(file_list[0], header=0, sep=';')
+
+        else:
+            logging.warning('No portfolio was found. Please Check.')
+            return None
+        return oDf.sort_values(['stock'], ascending=[1])
+
+    def create_move(self, iDate, iMoveType, iStockSymbol, iPrice, iQty):
+        oDf = pd.DataFrame([iDate, iMoveType, iStockSymbol, iPrice, iQty],
+                           columns=['date', 'movetype', 'stock', 'price', 'qty'])
+        oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+        return oDf
+
+    def add_move(self, iDate, iMoveType, iStockSymbol, iPrice, iQty):
+        file_list = glob.glob(sself.Paths['PFPath'] + 'Movements/' + '*.csv')
+        mDf = self.create_move(iDate, iMoveType, iStockSymbol, iPrice, iQty)
+        if len(file_list) == 0:
+            mDf.to_csv(self.Paths['movesPath'] + 'moves_histo_' + iDate + '.csv', header=True,
+                       index=False, sep=';')
+        else:
+            file_name = file_list[0].replace(self.Paths['PFPath'] + 'Movements/', '')
+            date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace('moves_histo_', ''),
+                                           format='%Y-%m-%d').date()
+            iDate = pd.to_datetime(iDate, format='%Y-%m-%d').date()
+            mDf.to_csv(file_list[0], mode='a', header=False,
+                       index=False, sep=';')
+            if iDate > date_last_maj:
+                os.rename(file_list[0],
+                          self.Paths['PFPath'] + 'Movements/' + 'moves_histo_' + iDate.strftime(
+                              format='%Y-%m-%d') + '.csv')
+        return
