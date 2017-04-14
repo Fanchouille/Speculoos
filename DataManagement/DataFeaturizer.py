@@ -355,7 +355,29 @@ def measure_ahead(iDf, iDaysNum):
     return iDf
 
 
-def compute_target(iDf, iFromDate=None, iDaysNum=10, iRollingWindow=20, iTopPct=0.1):
+def compute_regressor_target(iDf, iFromDate=None, iDaysNum=10):
+    """
+
+    :param iDf:
+    :param iDaysNum:
+    :param iRollingWindow:
+    :param iTopPct:
+    :return:
+    """
+
+    iDf = measure_ahead(iDf, iDaysNum)
+
+    targets = ['pct_rmin', 'pct_rmax', 'pct_rmean', 'norm_rstd']
+    drop_list = ['rmin', 'rmean', 'rmax', 'rstd', 'pct_rmin', 'pct_rmean', 'pct_rmax', 'norm_rstd']
+
+    iDf.drop([feat for feat in drop_list if feat not in targets], axis=1, inplace=True)
+
+    if iFromDate is not None:
+        iDf = iDf[iDf['date'] >= pd.to_datetime(iFromDate, format='%Y-%m-%d')].copy()
+    return iDf, targets
+
+
+def compute_classifier_target(iDf, iFromDate=None, iDaysNum=10, iRollingWindow=20, iTopPct=0.1):
     """
 
     :param iDf:
@@ -384,6 +406,10 @@ def compute_target(iDf, iFromDate=None, iDaysNum=10, iRollingWindow=20, iTopPct=
     if iFromDate is not None:
         iDf = iDf[iDf['date'] >= pd.to_datetime(iFromDate, format='%Y-%m-%d')].copy()
     return iDf, targets
+
+
+def compute_duration_between_targets(iDf, targets):
+    return iDf.loc[:, ['date'] + targets]
 
 
 def compute_signal(iDf, results):

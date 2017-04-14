@@ -110,10 +110,9 @@ class DataHandler:
                 date_last_maj = pd.to_datetime(file_name.replace('.csv', '').replace(iStockSymbol + '_', ''),
                                                format='%Y-%m-%d').date()
                 # if last available data was not yesterday
-                if (((dt.date.today() - date_last_maj).days > 1) & (dt.date.today().weekday() <= 4)) | (
-                            (date_last_maj.weekday() == 4) & (
-                                    (dt.date.today() - date_last_maj).days > 3)):
+                if ((dt.date.today() - date_last_maj).days > 1):
                     # get last available data
+                    #print date_last_maj
                     lDf = self.download_stock_data(iStockSymbol, date_last_maj + dt.timedelta(days=1), dt.date.today())
                     if lDf is not None:
                         # append last data to histo file (mode = 'a')
@@ -223,7 +222,8 @@ class DataHandler:
         return False
 
     def is_usable(self, iStockSymbol, iFromDate):
-        if self.is_up_to_date(iStockSymbol) & (self.check_consistency(iStockSymbol, iFromDate) == 1.0):
+        # 0.95 not to have to handle Férié days
+        if self.is_up_to_date(iStockSymbol) & (self.check_consistency(iStockSymbol, iFromDate) >= 0.95):
             return True
         return False
 
@@ -272,7 +272,7 @@ class DataHandler:
         return oDf
 
     def add_move(self, iDate, iMoveType, iStockSymbol, iPrice, iQty):
-        file_list = glob.glob(sself.Paths['PFPath'] + 'Movements/' + '*.csv')
+        file_list = glob.glob(self.Paths['PFPath'] + 'Movements/' + '*.csv')
         mDf = self.create_move(iDate, iMoveType, iStockSymbol, iPrice, iQty)
         if len(file_list) == 0:
             mDf.to_csv(self.Paths['movesPath'] + 'moves_histo_' + iDate + '.csv', header=True,

@@ -45,6 +45,8 @@ class PFManager:
         return self.DataHand.get_moves_histo()
 
         # TODO :
+        # check duration between Buys and Sells
+        # parallelize modeling (cf Mouchine)
         # create a new PF if None
         # get PF date
         # Rename PF if needed

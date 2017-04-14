@@ -1,4 +1,5 @@
 from Run import RunManager as RunManag
+from Models import DeepModels as dl
 import pandas as pd
 
 # .PA means PARIS STOCK EXCHANGE
@@ -18,14 +19,20 @@ runM = RunManag.RunManager(PARAMS)
 
 # Test Run
 # stock = 'SGO.PA'
+# df_pred, targets = runM.compute_targets_duration_on_stock_data(stock, '2012-01-01')
+# df_pred.to_csv('test_stock_duration.csv', sep=';', index=False)
 
-# fitted_models = runM.train_models_on_stock_data(stock, '2015-01-01')
-# runM.save_fitted_models(fitted_models, stock)
-# df_pred = runM.apply_models_on_data(stock, '2016-01-01')
+# TEST DEEP LEARNING
+# df = runM.DataHand.get_data(stock)
+# df_feat, features = runM.featurize_stock_data(df, stock, '2012-01-01')
+#df_train, targets = runM.compute_targets_on_stock_data(df_feat, stock, '2012-01-01')
 
-# runM.train_and_save_models('2015-01-01')
+# model = KerasClassifier(build_fn=dl.construct_deep_model(len(features)))
+# scaler, fittedmodels = dl.fit_models(df_train, features, targets)
+#dl.save(fittedmodels,scaler)
 
-# runDate = '2017-01-01'
-# runM.get_predictions_on_stocklist(runDate).to_csv(PARAMS['homepath']+'/results_'+runDate+'.csv', sep=';', index=False)
 
-runM.daily_run(iSleepRange=(2, 5), iTrainingFromDate='2015-01-01', iRetrain=False)
+# DAILY RUN
+runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
+runM.train_and_save_models(iFromDate='2012-01-01', iRetrain=False, iType='deep')
+# runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2015-01-01', iRetrain=False, iType='regressor')
