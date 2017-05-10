@@ -241,7 +241,6 @@ class RunManager:
 
     def train_and_save_models(self, iFromDate=None, iRetrain=False, iType='classifier'):
         for stock in self.Params['stocklist']:
-            print stock
             # print 'Training Stock : ' + stock + ' with supervised model type : ' + iType
             # logging.info('Training model for STOCK : ' + stock)
             self.train_and_save_models_on_stock(stock, iFromDate, iRetrain, iType)
@@ -264,9 +263,7 @@ class RunManager:
         :param iModelDate:
         :return:
         """
-        if self.DataHand.is_usable(iStockSymbol, iFromDate):
-            # print iStockSymbol
-            #print self.DataHand.is_usable(iStockSymbol, iFromDate)
+        if self.DataHand.is_up_to_date(iStockSymbol):
             # Get data if usable
             df = self.DataHand.get_data(iStockSymbol)
 
@@ -277,20 +274,29 @@ class RunManager:
                     pass
                 else:
                     self.Params['stockparams'][iStockSymbol] = modelsAndParams[1]
+                if modelsAndParams[0] is not None:
+                    targets = set(
+                        [target.replace('_gbr', '').replace('_rf', '') for target in modelsAndParams[0].keys()])
+                else:
+                    return None, None
             elif iType == 'deep':
-                modelsDict, scaler = dl.load_models(iModelPath, iModelDate, iType='deep')
+                lModelDict, lScaler = dl.load_models(self.Paths['ModelsPath'] + iStockSymbol, iModelDate, iType='deep')
+                if lModelDict is not None:
+                    targets = set(
+                        [target.replace('_deep', '') for target in lModelDict.keys()])
+                else:
+                    return None, None
 
             df_feat, features = self.featurize_stock_data(df, iStockSymbol, iFromDate)
-
-            if modelsAndParams[0] is not None:
-                targets = set([target.replace('_gbr', '').replace('_rf', '') for target in modelsAndParams[0].keys()])
-            else:
-                return None, None
+            # print features
 
             if iType == 'classifier':
                 df_pred = stoMod.apply_classifier_models(modelsAndParams[0], df_feat, features, targets)
             elif iType == 'regressor':
                 df_pred = stoMod.apply_regressor_models(modelsAndParams[0], df_feat, features, targets)
+            elif iType == 'deep':
+                df_pred = dl.apply_classifier_models(lModelDict, lScaler, df_feat, features, targets)
+
         else:
             if iFromDate is not None:
                 logging.warning(
@@ -299,8 +305,52 @@ class RunManager:
                 logging.warning(
                     'Data for stock ' + iStockSymbol + ' was not usable. Please check.')
             return None, None
-
         return df_pred, targets
+
+    def get_predictions_on_stock(self, iStockSymbol, iModelDate=None, iNumDays=1, iType='classifier'):
+        """
+
+        :param iFromDate:
+        :param iModelDate:
+        :param iNumDays:
+        :return:
+        """
+        results_per_stock = []
+        targets_final = []
+
+        iFromDate = (dt.date.today() - dt.timedelta(days=iNumDays)).strftime(format='%Y-%m-%d')
+        current_stock_df, targets = self.apply_models_on_data(iStockSymbol, iFromDate=iFromDate, iModelDate=iModelDate,
+                                                              iType=iType)
+
+        if current_stock_df is not None:
+            results_per_stock.append(current_stock_df.tail(iNumDays))
+
+            if iType == 'classifier':
+                targets_final = [target + '_p' for target in targets] + [target + '_ps' for target in targets]
+            elif iType == 'deep':
+                targets_final = [target + '_deep_p' for target in targets]
+            elif iType == 'regressor':
+                targets_final = [target + '_rf' for target in targets] + [target + '_gbr' for target in targets]
+
+        logging.info('Prediction for stock ' + iStockSymbol + ' computed.')
+
+        if len(results_per_stock) > 0:
+            #
+            # print len(results_per_stock)
+            # print ['stock', 'date', 'close'] + targets_final
+            oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date', 'close'] + targets_final]
+        else:
+            return None
+
+        if iType in ['classifier', 'deep']:
+            # Filter out rows with all targets at 0
+            oDf = oDf[oDf[targets_final].values.sum(axis=1) != 0]
+
+        if oDf.shape[0] == 0:
+            logging.warning('No move to do today.')
+            return None
+        else:
+            return oDf.dropna()
 
     def get_predictions_on_stocklist(self, iFromDate=None, iModelDate=None, iNumDays=1, iType='classifier'):
         """
@@ -325,8 +375,7 @@ class RunManager:
                         targets_final = [target + '_deep_p' for target in targets]
                     elif iType == 'regressor':
                         targets_final = [target + '_rf' for target in targets] + [target + '_gbr' for target in targets]
-                        # print iNumDays
-                        # print current_stock_df.tail()
+
             except:
                 print "Error on stock : " + stock
 
@@ -335,12 +384,12 @@ class RunManager:
         if len(results_per_stock) > 0:
             #
             # print len(results_per_stock)
-            #print ['stock', 'date', 'close'] + targets_final
+            # print ['stock', 'date', 'close'] + targets_final
             oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date', 'close'] + targets_final]
         else:
             return None
 
-        if iType == 'classifier':
+        if iType in ['classifier', 'deep']:
             # Filter out rows with all targets at 0
             oDf = oDf[oDf[targets_final].values.sum(axis=1) != 0]
 
@@ -380,6 +429,15 @@ class RunManager:
         else:
             return None
 
+    def clean_stock_data(self, iStockSymbol):
+        self.DataHand.clean_stock_data(iStockSymbol)
+        return
+
+    def clean_all_stocks_data(self):
+        for stock in self.Params['stocklist']:
+            self.clean_stock_data(stock)
+        return
+
     def daily_run(self, iSleepRange, iTrainingFromDate=None, iModelDate=None, iRetrain=False, iType='classifier'):
         """
 
@@ -407,7 +465,7 @@ class RunManager:
                 num_days = 1
         else:
             num_days = 1
-        #print num_days
+        # print num_days
 
         iFromDate = (current_day - dt.timedelta(days=num_days)).strftime(format='%Y-%m-%d')
         # Compute predictions for days not since last prediction

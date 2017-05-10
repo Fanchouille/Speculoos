@@ -7,7 +7,7 @@ import pandas as pd
 stocklist_df = pd.read_csv('/Users/fanch/Desktop/Titres/eurolist_nom.csv', header=0, sep=';')
 
 # Params to get data
-stocklist = sorted(stocklist_df[stocklist_df['EUROLIST'] == 'A'].loc[:, 'StockSymbol'].unique())
+stocklist = sorted(stocklist_df[stocklist_df['EUROLIST'].isin(['A', 'B'])].loc[:, 'StockSymbol'].unique())
 PARAMS = {'homepath': '/Users/fanch/Desktop/Titres',
           'stocklist': stocklist,
           # 'stockparams':
@@ -25,14 +25,15 @@ runM = RunManag.RunManager(PARAMS)
 # TEST DEEP LEARNING
 # df = runM.DataHand.get_data(stock)
 # df_feat, features = runM.featurize_stock_data(df, stock, '2012-01-01')
-#df_train, targets = runM.compute_targets_on_stock_data(df_feat, stock, '2012-01-01')
+# df_train, targets = runM.compute_targets_on_stock_data(df_feat, stock, '2012-01-01')
 
 # model = KerasClassifier(build_fn=dl.construct_deep_model(len(features)))
 # scaler, fittedmodels = dl.fit_models(df_train, features, targets)
-#dl.save(fittedmodels,scaler)
+# dl.save(fittedmodels,scaler)
 
 
 # DAILY RUN
-runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
-runM.train_and_save_models(iFromDate='2012-01-01', iRetrain=False, iType='deep')
-# runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2015-01-01', iRetrain=False, iType='regressor')
+# print runM.get_predictions_on_stock('AC.PA', iModelDate=None, iNumDays=1, iType='deep')
+# runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
+
+print runM.DataHand.get_stock_info_from_stocklist(['ZC', 'AIR', 'SLB', 'RMS'], pd.to_datetime('2017-05-10').date())

@@ -1,3 +1,4 @@
+# coding: utf-8
 import PathHandler as ph
 import requests
 from io import StringIO
@@ -7,6 +8,8 @@ import os
 import glob
 import time
 import random
+from lxml import html
+import numpy as np
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -75,11 +78,80 @@ class DataHandler:
                 oDf.loc[:, 'Stock'] = iStockSymbol
                 oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
                 oDf.sort_values('Date', inplace=True)
-                return oDf.loc[:, ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+                return oDf[oDf['Volume'] > 0].loc[:,
+                       ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
             else:
                 return None
         elif r.status_code == 404:
             return None
+
+    def check_abc_advise(self, t):
+        if 'achat' in t.lower():
+            return 'Achat'
+        elif ('nuage' in t.lower()) | ('consolidation' in t.lower()):
+            return 'Conserver'
+        elif u'sécurité' in t.lower():
+            return 'Vente_Faible'
+        elif u'baissier' in t.lower():
+            return 'Vente_Forte'
+
+    def get_stock_info(self, iStockSymbol, iFromDate):
+        url = "https://www.abcbourse.com/marches/events.aspx?s=" + iStockSymbol + "p"
+        r = requests.get(url)
+        tree = html.fromstring(r.content)
+        liste_fields = tree.xpath('//td/text()')
+        stock_info = pd.DataFrame([unicode(field.encode('latin1'), 'utf-8') for field in liste_fields],
+                                  columns=['RawText'])
+        stock_info.loc[:, 'RealDates'] = stock_info.loc[:, 'RawText'].map(
+            lambda x: pd.to_datetime(x, format='%d/%m/%Y', errors='coerce').date())
+        stock_info.loc[:, 'EventType'] = stock_info.loc[:, 'RawText'].map(
+            lambda x: x if (u'Résultat' in x) | (u'Chiffre' in x) else np.nan)
+        stock_info.loc[:, 'EventDates'] = stock_info.loc[:, 'RealDates'].shift(1)
+        stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'RawText'].shift(-1)
+        stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'EventComments'].map(
+            lambda x: 'Before' if u'Avant' in unicode(x) else 'After' if u'Après' in unicode(x) else np.nan)
+        stock_info.loc[:, 'EventAlertDates'] = stock_info.apply(
+            lambda x: (x['EventDates'] - dt.timedelta(days=1)) if (x['EventComments'] == 'Before') else x['EventDates'],
+            axis=1)
+        stock_info.loc[:, 'stock'] = iStockSymbol
+        stock_info.loc[:, 'date'] = iFromDate
+        if (stock_info.loc[:, 'EventDates'].dropna().max() - iFromDate).days > 0:
+            cleaned_stock_info = stock_info[stock_info.loc[:, 'EventDates'] > iFromDate].loc[:,
+                                 ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']].dropna()
+        else:
+            cleaned_stock_info = stock_info[
+                                     stock_info.loc[:, 'EventDates'] == stock_info.loc[:,
+                                                                        'EventDates'].dropna().max()].loc[:,
+                                 ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']].dropna()
+
+        cleaned_stock_info.loc[:, 'TimeToEvent'] = (
+            cleaned_stock_info.loc[:, 'EventDates'] - cleaned_stock_info.loc[:, 'date'])
+
+        # Advise of ABC bourse
+        url = "https://www.abcbourse.com/analyses/conseil.aspx?s=" + iStockSymbol + "p"
+        r = requests.get(url)
+        tree = html.fromstring(r.content)
+        liste_fields = tree.xpath('//td/text()')
+        text = [unicode(field.encode('latin1').replace('\t', '').replace('\r\n', '').strip(), 'utf8') \
+                for field in liste_fields if field.encode('latin1').replace('\t', '').replace('\r\n', '').strip() != '']
+
+        cleaned_stock_info.loc[:, 'Conseil'] = self.check_abc_advise(text[2])
+
+        return cleaned_stock_info.sort_values('TimeToEvent').iloc[[0]]
+
+    def get_stock_info_from_stocklist(self, iStockList, iFromDate):
+        return pd.concat([self.get_stock_info(StockSymbol, iFromDate) for StockSymbol in iStockList])
+
+    def clean_stock_data(self, iStockSymbol):
+        if os.path.exists(self.Paths['DataPath'] + iStockSymbol + '/'):
+            file_list = glob.glob(self.Paths['DataPath'] + iStockSymbol + '/*.csv')
+            # We must have only one file
+            if len(file_list) == 1:
+                file_name = file_list[0].replace(self.Paths['DataPath'] + iStockSymbol + '/', '')
+                df = pd.read_csv(self.Paths['DataPath'] + iStockSymbol + '/' + file_name, header=0, sep=';')
+                df[df['Volume'] > 0].to_csv(self.Paths['DataPath'] + iStockSymbol + '/' + file_name,
+                                            index=False, sep=';')
+        return
 
     def save_stock_data(self, iStockSymbol):
         """
@@ -112,18 +184,20 @@ class DataHandler:
                 # if last available data was not yesterday
                 if ((dt.date.today() - date_last_maj).days > 1):
                     # get last available data
-                    #print date_last_maj
+                    # print date_last_maj
                     lDf = self.download_stock_data(iStockSymbol, date_last_maj + dt.timedelta(days=1), dt.date.today())
-                    if lDf is not None:
-                        # append last data to histo file (mode = 'a')
-                        max_date = lDf.loc[:, 'Date'].max()
-                        lDf.to_csv(self.Paths['DataPath'] + iStockSymbol + '/' + file_name, mode='a', header=False,
-                                   index=False, sep=';')
-                        os.rename(self.Paths['DataPath'] + iStockSymbol + '/' + file_name,
-                                  self.Paths['DataPath'] + iStockSymbol + '/' + iStockSymbol + '_' + max_date.strftime(
-                                      format='%Y-%m-%d') + '.csv')
-                        logging.info(
-                            'Historical data for stock ' + iStockSymbol + ' was updated.')
+                    if (lDf is not None):
+                        if (lDf.shape[0] > 0):
+                            # append last data to histo file (mode = 'a')
+                            max_date = lDf.loc[:, 'Date'].max()
+                            lDf.to_csv(self.Paths['DataPath'] + iStockSymbol + '/' + file_name, mode='a', header=False,
+                                       index=False, sep=';')
+                            os.rename(self.Paths['DataPath'] + iStockSymbol + '/' + file_name,
+                                      self.Paths[
+                                          'DataPath'] + iStockSymbol + '/' + iStockSymbol + '_' + max_date.strftime(
+                                          format='%Y-%m-%d') + '.csv')
+                            logging.info(
+                                'Historical data for stock ' + iStockSymbol + ' was updated.')
                     else:
                         logging.warning(
                             'Historical data for stock ' + iStockSymbol + ' was not updated :  : data was not found.')
@@ -222,7 +296,9 @@ class DataHandler:
         return False
 
     def is_usable(self, iStockSymbol, iFromDate):
-        # 0.95 not to have to handle Férié days
+        # 0.95 not to have to handle  days
+        # print self.is_up_to_date(iStockSymbol)
+        # print self.check_consistency(iStockSymbol, iFromDate)
         if self.is_up_to_date(iStockSymbol) & (self.check_consistency(iStockSymbol, iFromDate) >= 0.95):
             return True
         return False
@@ -288,4 +364,8 @@ class DataHandler:
                 os.rename(file_list[0],
                           self.Paths['PFPath'] + 'Movements/' + 'moves_histo_' + iDate.strftime(
                               format='%Y-%m-%d') + '.csv')
+        return
+
+    def save_stock_info_sql_lite(self, iFromDate):
+
         return

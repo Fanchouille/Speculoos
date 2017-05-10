@@ -21,11 +21,11 @@ formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 batch_size = [10]  # [10, 50]
 epochs = [50]
 optimizer = ['Adam']  # possibilities ['SGD', 'RMSprop', 'Adagrad', 'Adadelta', 'Adam', 'Adamax', 'Nadam']
-activation = ['relu',
-              'linear']  # ['relu','linear']  # possibilities ['softmax', 'softplus', 'softsign', 'relu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear']
+activation = [
+    'relu']  # ['relu','linear']  # possibilities ['softmax', 'softplus', 'softsign', 'relu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear']
 
 dropout_rate = [0.5]
-neurons = [5, 10, 20]
+neurons = [10, 20]
 
 DEFAULTPARAMGRID = dict(iOptimizer=optimizer,
                         iActivation=activation,
@@ -34,7 +34,7 @@ DEFAULTPARAMGRID = dict(iOptimizer=optimizer,
                         batch_size=batch_size, epochs=epochs)
 
 
-def construct_deep_model(iNumNeurons=5, iActivation='linear', iDropoutRate=0.0,
+def construct_deep_model(iNumNeurons=5, iActivation='relu', iDropoutRate=0.0,
                          iOptimizer='adam'):
     """
 
@@ -82,8 +82,8 @@ def fit_models(iDf, features, targets):
 
         if iDf.loc[:, target].value_counts().shape[0] > 1:
             lGrid.fit(X, iDf.loc[:, target].astype(int).values)
-            print lGrid.best_params_
-            print lGrid.best_score_
+            # print lGrid.best_params_
+            # print lGrid.best_score_
             oFittedModelsDict[target + '_deep'] = lGrid.best_estimator_.model
 
     return scaler, oFittedModelsDict
@@ -100,7 +100,7 @@ def apply_classifier_models(iModelDict, iScaler, iDf, features, targets):
     """
     X = iScaler.transform(iDf.loc[:, features].astype(float).values)
     for target in targets:
-        iDf.loc[:, target + '_deep_p'] = iModelDict[target + '_deep'].predict(X)
+        iDf.loc[:, target + '_deep_p'] = iModelDict[target + '_deep'].predict_classes(X, verbose=0)
     return iDf
 
 
@@ -149,10 +149,10 @@ def load_models(iModelPath, iDate=None, iType='deep'):
         for file in file_list:
             # Deep model file
             if 'h5' in file:
-                oModelDict[file.replace('.h5', '')] = load_model(file)
-            # Standard scaler file
-            elif 'pkl' in file:
-                scaler = joblib.load(iModelPath + '/' + iType + '/' + last_date_folder + '/scaler.pkl')
+                oModelDict[file.replace('.h5', '')] = load_model(
+                    iModelPath + '/' + iType + '/' + last_date_folder + '/' + file)
+        # Standard scaler file
+        scaler = joblib.load(iModelPath + '/' + iType + '/' + last_date_folder + '/scaler.pkl')
 
         return oModelDict, scaler
     else:
