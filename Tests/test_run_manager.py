@@ -16,6 +16,7 @@ PARAMS = {'homepath': '/Users/fanch/Desktop/Titres',
 
 # Launch Run manager
 runM = RunManag.RunManager(PARAMS)
+print stocklist
 
 # Test Run
 # stock = 'SGO.PA'
@@ -34,6 +35,6 @@ runM = RunManag.RunManager(PARAMS)
 
 # DAILY RUN
 # print runM.get_predictions_on_stock('AC.PA', iModelDate=None, iNumDays=1, iType='deep')
-# runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
+runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
 
-print runM.DataHand.get_stock_info_from_stocklist(['ZC', 'AIR', 'SLB', 'RMS'], pd.to_datetime('2017-05-10').date())
+# print runM.DataHand.get_stock_info_from_stocklist([stock.replace('.PA','') for stock in stocklist[:5]], pd.to_datetime('2017-05-11').date())

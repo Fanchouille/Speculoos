@@ -386,6 +386,9 @@ class RunManager:
             # print len(results_per_stock)
             # print ['stock', 'date', 'close'] + targets_final
             oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date', 'close'] + targets_final]
+            moveStockList = oDf.loc[:, 'stock'].unique()
+            abcDf = self.DataHand.get_stock_info_from_stocklist([stock.replace('.PA', '') for stock in moveStockList],
+                                                                dt.date.today())
         else:
             return None
 
@@ -397,7 +400,7 @@ class RunManager:
             logging.warning('No move to do today.')
             return None
         else:
-            return oDf.dropna()
+            return pd.merge(oDf.dropna(), abcDf, how='left', on=['stock'])
 
     def save_predictions_on_stocklist(self, iFromDate=None, iModelDate=None, iNumDays=1, iType='classifier'):
         self.create_results_path(iType)
@@ -406,7 +409,7 @@ class RunManager:
             pred_df.to_csv(
                 self.Paths['ResultsPath'] + iType + '/' + 'results_' + dt.date.today().strftime(
                     format='%Y-%m-%d') + '.csv',
-                sep=';', index=False)
+                sep=';', index=False, decimal=',', encoding='utf-8')
         else:
             print 'Pred df is empty !'
         return

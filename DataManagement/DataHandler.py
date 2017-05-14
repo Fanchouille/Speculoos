@@ -94,6 +94,8 @@ class DataHandler:
             return 'Vente_Faible'
         elif u'baissier' in t.lower():
             return 'Vente_Forte'
+        else:
+            return 'Pas de conseil.'
 
     def get_stock_info(self, iStockSymbol, iFromDate):
         url = "https://www.abcbourse.com/marches/events.aspx?s=" + iStockSymbol + "p"
@@ -110,34 +112,45 @@ class DataHandler:
         stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'RawText'].shift(-1)
         stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'EventComments'].map(
             lambda x: 'Before' if u'Avant' in unicode(x) else 'After' if u'Après' in unicode(x) else np.nan)
-        stock_info.loc[:, 'EventAlertDates'] = stock_info.apply(
-            lambda x: (x['EventDates'] - dt.timedelta(days=1)) if (x['EventComments'] == 'Before') else x['EventDates'],
-            axis=1)
-        stock_info.loc[:, 'stock'] = iStockSymbol
-        stock_info.loc[:, 'date'] = iFromDate
-        if (stock_info.loc[:, 'EventDates'].dropna().max() - iFromDate).days > 0:
-            cleaned_stock_info = stock_info[stock_info.loc[:, 'EventDates'] > iFromDate].loc[:,
-                                 ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']].dropna()
+
+        if stock_info.shape[0] > 0:
+            stock_info.loc[:, 'EventAlertDates'] = stock_info.apply(
+                lambda x: (x['EventDates'] - dt.timedelta(days=1)) if (x['EventComments'] == 'Before') else x[
+                    'EventDates'],
+                axis=1)
+            stock_info.loc[:, 'stock'] = iStockSymbol
+
+            stock_info.loc[:, 'date'] = iFromDate
+
+            if (stock_info.loc[:, 'EventDates'].dropna().max() - iFromDate).days > 0:
+                cleaned_stock_info = stock_info[stock_info.loc[:, 'EventDates'] > iFromDate].loc[:,
+                                     ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']]
+            else:
+                cleaned_stock_info = stock_info[
+                                         stock_info.loc[:, 'EventDates'] == stock_info.loc[:,
+                                                                            'EventDates'].dropna().max()].loc[:,
+                                     ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']]
+
+            cleaned_stock_info.loc[:, 'TimeToEvent'] = (
+                cleaned_stock_info.loc[:, 'EventDates'] - cleaned_stock_info.loc[:, 'date'])
+
+            # Advise of ABC bourse
+            url = "https://www.abcbourse.com/analyses/conseil.aspx?s=" + iStockSymbol + "p"
+            r = requests.get(url)
+            tree = html.fromstring(r.content)
+            liste_fields = tree.xpath('//td/text()')
+            text = [unicode(field.encode('latin1').replace('\t', '').replace('\r\n', '').strip(), 'utf8') \
+                    for field in liste_fields if
+                    field.encode('latin1').replace('\t', '').replace('\r\n', '').strip() != '']
+
+            cleaned_stock_info.loc[:, 'Conseil'] = self.check_abc_advise(text[2])
+            cleaned_stock_info.loc[:, 'stock'] = cleaned_stock_info.loc[:, 'stock'].map(lambda x: x + '.PA')
+            sleep = random.randint(1, 1)
+            time.sleep(sleep)
+
+            return cleaned_stock_info.sort_values('TimeToEvent').iloc[[0]]
         else:
-            cleaned_stock_info = stock_info[
-                                     stock_info.loc[:, 'EventDates'] == stock_info.loc[:,
-                                                                        'EventDates'].dropna().max()].loc[:,
-                                 ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']].dropna()
-
-        cleaned_stock_info.loc[:, 'TimeToEvent'] = (
-            cleaned_stock_info.loc[:, 'EventDates'] - cleaned_stock_info.loc[:, 'date'])
-
-        # Advise of ABC bourse
-        url = "https://www.abcbourse.com/analyses/conseil.aspx?s=" + iStockSymbol + "p"
-        r = requests.get(url)
-        tree = html.fromstring(r.content)
-        liste_fields = tree.xpath('//td/text()')
-        text = [unicode(field.encode('latin1').replace('\t', '').replace('\r\n', '').strip(), 'utf8') \
-                for field in liste_fields if field.encode('latin1').replace('\t', '').replace('\r\n', '').strip() != '']
-
-        cleaned_stock_info.loc[:, 'Conseil'] = self.check_abc_advise(text[2])
-
-        return cleaned_stock_info.sort_values('TimeToEvent').iloc[[0]]
+            return None
 
     def get_stock_info_from_stocklist(self, iStockList, iFromDate):
         return pd.concat([self.get_stock_info(StockSymbol, iFromDate) for StockSymbol in iStockList])
