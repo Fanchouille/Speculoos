@@ -19,7 +19,7 @@ formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 
 class PFManager:
     def __init__(self, iParamsDict):
-        self.Params = iParamsDict
+        self.Credentials = iParamsDict
         self.Paths = ph.get_all_paths(self.Params['homepath'])
         self.DataHand = dhand.DataHandler(
             {k: self.Params[k] for k in self.Params.keys() if k in ['homepath', 'stocklist']})
@@ -38,8 +38,17 @@ class PFManager:
         self.file_handler = file_handler
         return
 
-    def load_movements(self):
-        return self.DataHand.get_moves_histo()
+    def load_credentials(self):
+        ph.create_path(self.Paths['PFPath'] + 'DeGiro')
+        if os.path.exists(self.Paths['PFPath'] + 'DeGiro/credentials.txt'):
+            cred_df = pd.read_csv(self.Paths['PFPath'] + 'DeGiro/credentials.txt', header=None, delimiter=':')
+            for col in cred_df.columns:
+                cred_df.loc[:, col] = cred_df.loc[:, col].map(lambda x: x.strip())
+            return cred_df.set_index(0).to_dict()[1]
+        else:
+            print 'No credantials file found ! Please create file ' + self.Paths[
+                'PFPath'] + 'DeGiro/credentials.txt' + ' with *username : your_login* and *password : your_password* lines.'
+            return None
 
     def load_portfolio(self):
         return self.DataHand.get_moves_histo()

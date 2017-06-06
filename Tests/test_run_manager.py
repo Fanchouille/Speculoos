@@ -8,6 +8,8 @@ stocklist_df = pd.read_csv('/Users/fanch/Desktop/Titres/eurolist_nom.csv', heade
 
 # Params to get data
 stocklist = sorted(stocklist_df[stocklist_df['EUROLIST'].isin(['A', 'B'])].loc[:, 'StockSymbol'].unique())
+stocklist = [stock for stock in stocklist if stock not in ['APAM.PA', 'ASIT.PA']]
+
 PARAMS = {'homepath': '/Users/fanch/Desktop/Titres',
           'stocklist': stocklist,
           # 'stockparams':
@@ -35,6 +37,8 @@ print stocklist
 
 # DAILY RUN
 # print runM.get_predictions_on_stock('AC.PA', iModelDate=None, iNumDays=1, iType='deep')
-runM.daily_run(iSleepRange=(1, 1), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
+runM.daily_run(iSleepRange=(10, 15), iTrainingFromDate='2013-01-01', iRetrain=False, iType='classifier')
+
+# print runM.DataHand.get_stock_info_from_stocklist([stock.replace('.PA','') for stock in stocklist[:5]], pd.to_datetime('2017-05-11').date()).dtypes
 
 # print runM.DataHand.get_stock_info_from_stocklist([stock.replace('.PA','') for stock in stocklist[:5]], pd.to_datetime('2017-05-11').date())

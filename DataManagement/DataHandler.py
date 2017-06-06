@@ -10,6 +10,7 @@ import time
 import random
 from lxml import html
 import numpy as np
+import fix_yahoo_finance as yf
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -44,7 +45,7 @@ class DataHandler:
         self.file_handler = file_handler
         return
 
-    def download_stock_data(self, iStockSymbol, iFromDate=None, iToDate=None):
+    def download_stock_data(self, iStockSymbol, iFromDate=None, iToDate=None, iUse_Fix_Yahoo=True):
         """
 
         :param iStockSymbol: Stock Symbol (SLB-PA for instance)
@@ -52,38 +53,68 @@ class DataHandler:
         :return: historical data from Yahoo as a pandas DF
         source : https://github.com/mdengler/stockquote/blob/master/stockquote.py
         """
-        if iFromDate is None:
-            lUrl = ("http://ichart.finance.yahoo.com/table.csv?"
-                    "s=%s" % (iStockSymbol,))
-        else:
-            lUrl = ("http://ichart.finance.yahoo.com/table.csv?"
-                    "s=%s&"
-                    "a=%s&"
-                    "b=%s&"
-                    "c=%s&"
-                    "d=%s&"
-                    "e=%s&"
-                    "f=%s&"
-                    "g=d&"
-                    "ignore=.csv" % (
-                        iStockSymbol, iFromDate.month - 1, iFromDate.day, iFromDate.year, iToDate.month - 1,
-                        iToDate.day,
-                        iToDate.year,))
-        # print lUrl
-        r = requests.get(lUrl)
-        if r.status_code == 200:
-            lS = r.text
-            oDf = pd.read_csv(StringIO(lS))
-            if oDf.shape[0] > 0:
-                oDf.loc[:, 'Stock'] = iStockSymbol
-                oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
-                oDf.sort_values('Date', inplace=True)
-                return oDf[oDf['Volume'] > 0].loc[:,
-                       ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+
+        if iUse_Fix_Yahoo:
+            if iFromDate is not None:
+                try:
+                    oDf = yf.download(iStockSymbol, start=iFromDate.strftime("%Y-%m-%d"),
+                                      end=iToDate.strftime("%Y-%m-%d"))
+                except:
+                    print iStockSymbol + ' data was not fetched.'
+                    oDf = None
+                if oDf is not None:
+                    oDf.reset_index(inplace=True)
+                    oDf.loc[:, 'Stock'] = iStockSymbol
+                    oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+                    oDf.sort_values('Date', inplace=True)
+                    return oDf[oDf['Volume'] > 0].loc[:,
+                           ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+                else:
+                    return None
             else:
+                # If no date is provided, dowload from 1st jan 2000
+                oDf = yf.download(iStockSymbol, start='2000-01-01', end=dt.date.today().strftime("%Y-%m-%d"))
+                if oDf is not None:
+                    oDf.reset_index(inplace=True)
+                    oDf.loc[:, 'Stock'] = iStockSymbol
+                    oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+                    oDf.sort_values('Date', inplace=True)
+                    return oDf[oDf['Volume'] > 0].loc[:,
+                           ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+
+        else:
+            if iFromDate is None:
+                lUrl = ("http://ichart.finance.yahoo.com/table.csv?"
+                        "s=%s" % (iStockSymbol,))
+            else:
+                lUrl = ("http://ichart.finance.yahoo.com/table.csv?"
+                        "s=%s&"
+                        "a=%s&"
+                        "b=%s&"
+                        "c=%s&"
+                        "d=%s&"
+                        "e=%s&"
+                        "f=%s&"
+                        "g=d&"
+                        "ignore=.csv" % (
+                            iStockSymbol, iFromDate.month - 1, iFromDate.day, iFromDate.year, iToDate.month - 1,
+                            iToDate.day,
+                            iToDate.year,))
+            # print lUrl
+            r = requests.get(lUrl)
+            if r.status_code == 200:
+                lS = r.text
+                oDf = pd.read_csv(StringIO(lS))
+                if oDf.shape[0] > 0:
+                    oDf.loc[:, 'Stock'] = iStockSymbol
+                    oDf.loc[:, 'Date'] = pd.to_datetime(oDf.loc[:, 'Date'], format='%Y-%m-%d')
+                    oDf.sort_values('Date', inplace=True)
+                    return oDf[oDf['Volume'] > 0].loc[:,
+                           ['Stock', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']]
+                else:
+                    return None
+            elif r.status_code == 404:
                 return None
-        elif r.status_code == 404:
-            return None
 
     def check_abc_advise(self, t):
         if 'achat' in t.lower():
@@ -99,19 +130,29 @@ class DataHandler:
 
     def get_stock_info(self, iStockSymbol, iFromDate):
         url = "https://www.abcbourse.com/marches/events.aspx?s=" + iStockSymbol + "p"
-        r = requests.get(url)
-        tree = html.fromstring(r.content)
-        liste_fields = tree.xpath('//td/text()')
-        stock_info = pd.DataFrame([unicode(field.encode('latin1'), 'utf-8') for field in liste_fields],
-                                  columns=['RawText'])
-        stock_info.loc[:, 'RealDates'] = stock_info.loc[:, 'RawText'].map(
-            lambda x: pd.to_datetime(x, format='%d/%m/%Y', errors='coerce').date())
-        stock_info.loc[:, 'EventType'] = stock_info.loc[:, 'RawText'].map(
-            lambda x: x if (u'Résultat' in x) | (u'Chiffre' in x) else np.nan)
-        stock_info.loc[:, 'EventDates'] = stock_info.loc[:, 'RealDates'].shift(1)
-        stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'RawText'].shift(-1)
-        stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'EventComments'].map(
-            lambda x: 'Before' if u'Avant' in unicode(x) else 'After' if u'Après' in unicode(x) else np.nan)
+        try:
+            r = requests.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
+        except requests.exceptions.ConnectionError:
+            r.status_code = "Connection refused"
+            r = None
+
+        if r is not None:
+            tree = html.fromstring(r.content)
+
+            liste_fields = tree.xpath('//td/text()')
+            stock_info = pd.DataFrame([unicode(field.encode('latin1'), 'utf-8') for field in liste_fields],
+                                      columns=['RawText'])
+            stock_info.loc[:, 'RealDates'] = stock_info.loc[:, 'RawText'].map(
+                lambda x: pd.to_datetime(x, format='%d/%m/%Y', errors='coerce').date())
+            stock_info.loc[:, 'EventType'] = stock_info.loc[:, 'RawText'].map(
+                lambda x: x if (u'Résultat' in x) | (u'Chiffre' in x) else np.nan)
+            stock_info.loc[:, 'EventDates'] = stock_info.loc[:, 'RealDates'].shift(1)
+            stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'RawText'].shift(-1)
+            stock_info.loc[:, 'EventComments'] = stock_info.loc[:, 'EventComments'].map(
+                lambda x: 'Before' if u'Avant' in unicode(x) else 'After' if u'Après' in unicode(x) else np.nan)
+        else:
+            stock_info = pd.DataFrame()
 
         if stock_info.shape[0] > 0:
             stock_info.loc[:, 'EventAlertDates'] = stock_info.apply(
@@ -120,23 +161,26 @@ class DataHandler:
                 axis=1)
             stock_info.loc[:, 'stock'] = iStockSymbol
 
-            stock_info.loc[:, 'date'] = iFromDate
+            stock_info.loc[:, 'dateInfo'] = iFromDate
 
             if (stock_info.loc[:, 'EventDates'].dropna().max() - iFromDate).days > 0:
                 cleaned_stock_info = stock_info[stock_info.loc[:, 'EventDates'] > iFromDate].loc[:,
-                                     ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']]
+                                     ['stock', 'dateInfo', 'EventType', 'EventDates', 'EventAlertDates']]
             else:
                 cleaned_stock_info = stock_info[
                                          stock_info.loc[:, 'EventDates'] == stock_info.loc[:,
                                                                             'EventDates'].dropna().max()].loc[:,
-                                     ['stock', 'date', 'EventType', 'EventDates', 'EventAlertDates']]
+                                     ['stock', 'dateInfo', 'EventType', 'EventDates', 'EventAlertDates']]
 
             cleaned_stock_info.loc[:, 'TimeToEvent'] = (
-                cleaned_stock_info.loc[:, 'EventDates'] - cleaned_stock_info.loc[:, 'date'])
+                cleaned_stock_info.loc[:, 'EventDates'] - cleaned_stock_info.loc[:, 'dateInfo'])
+            cleaned_stock_info.loc[:, 'TimeToEvent'] = cleaned_stock_info.loc[:, 'TimeToEvent'].map(
+                lambda x: x.days if x.days > 0 else 0)
 
             # Advise of ABC bourse
             url = "https://www.abcbourse.com/analyses/conseil.aspx?s=" + iStockSymbol + "p"
-            r = requests.get(url)
+            r = requests.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
             tree = html.fromstring(r.content)
             liste_fields = tree.xpath('//td/text()')
             text = [unicode(field.encode('latin1').replace('\t', '').replace('\r\n', '').strip(), 'utf8') \
@@ -145,7 +189,7 @@ class DataHandler:
 
             cleaned_stock_info.loc[:, 'Conseil'] = self.check_abc_advise(text[2])
             cleaned_stock_info.loc[:, 'stock'] = cleaned_stock_info.loc[:, 'stock'].map(lambda x: x + '.PA')
-            sleep = random.randint(1, 1)
+            sleep = random.randint(3, 5)
             time.sleep(sleep)
 
             return cleaned_stock_info.sort_values('TimeToEvent').iloc[[0]]

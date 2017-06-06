@@ -370,9 +370,13 @@ class RunManager:
                     results_per_stock.append(current_stock_df.tail(iNumDays))
 
                     if iType == 'classifier':
-                        targets_final = [target + '_p' for target in targets] + [target + '_ps' for target in targets]
+                        targets_final = [target + '_p' for target in targets] + [target + '_ps' for target in
+                                                                                 targets] + [target + '_final' for
+                                                                                             target
+                                                                                             in targets]
                     elif iType == 'deep':
-                        targets_final = [target + '_deep_p' for target in targets]
+                        targets_final = [target + '_deep_p' for target in targets] + [target + '_final' for target
+                                                                                      in targets]
                     elif iType == 'regressor':
                         targets_final = [target + '_rf' for target in targets] + [target + '_gbr' for target in targets]
 
@@ -386,21 +390,45 @@ class RunManager:
             # print len(results_per_stock)
             # print ['stock', 'date', 'close'] + targets_final
             oDf = pd.concat(results_per_stock).loc[:, ['stock', 'date', 'close'] + targets_final]
-            moveStockList = oDf.loc[:, 'stock'].unique()
+
+            # Fetch data only for B moves (buy) before ABC advise
+            moveStockList = oDf[oDf[[target for target in targets_final if
+                                     ('B' in target) & ('final' not in target)]].values.sum(axis=1) != 0].loc[:,
+                            'stock'].unique()
             abcDf = self.DataHand.get_stock_info_from_stocklist([stock.replace('.PA', '') for stock in moveStockList],
                                                                 dt.date.today())
+
+
         else:
             return None
-
-        if iType in ['classifier', 'deep']:
-            # Filter out rows with all targets at 0
-            oDf = oDf[oDf[targets_final].values.sum(axis=1) != 0]
 
         if oDf.shape[0] == 0:
             logging.warning('No move to do today.')
             return None
         else:
-            return pd.merge(oDf.dropna(), abcDf, how='left', on=['stock'])
+            results = pd.merge(oDf[oDf[[target for target in targets_final if
+                                        ('B' in target) & ('final' not in target)]].values.sum(axis=1) != 0], abcDf,
+                               how='left', on=['stock'])
+            # print results.shape
+
+            if iType in ['classifier']:
+                results.loc[:, 'B_TARGET_final'] = results.apply(
+                    lambda x: 1 if ((x['B_TARGET_ps'] == 1) & (x['Conseil'] == 'Achat')) else 0, axis=1).values
+                # Filter out rows with all targets at 0
+                results = results[results[targets_final].values.sum(axis=1) != 0].sort_values(
+                    ['B_TARGET_final', 'close'], ascending=[0, 1])
+                for target in targets_final:
+                    results.loc[:, target] = results.loc[:, target].fillna(0).astype(int)
+            if iType in ['deep']:
+                results.loc[:, 'B_TARGET_final'] = results.apply(
+                    lambda x: 1 if ((x['B_TARGET_deep_p'] == 1) & (x['Conseil'] == 'Achat')) else 0, axis=1).values
+                # Filter out rows with all targets at 0
+                results = results[results[targets_final].values.sum(axis=1) != 0].sort_values(
+                    ['B_TARGET_final', 'close'], ascending=[0, 1])
+                for target in targets_final:
+                    results.loc[:, target] = results.loc[:, target].fillna(0).astype(int)
+
+            return results
 
     def save_predictions_on_stocklist(self, iFromDate=None, iModelDate=None, iNumDays=1, iType='classifier'):
         self.create_results_path(iType)
@@ -441,7 +469,8 @@ class RunManager:
             self.clean_stock_data(stock)
         return
 
-    def daily_run(self, iSleepRange, iTrainingFromDate=None, iModelDate=None, iRetrain=False, iType='classifier'):
+    def daily_run(self, iSleepRange=(5, 10), iTrainingFromDate=None, iModelDate=None, iRetrain=False,
+                  iType='classifier'):
         """
 
         :param iSleepRange:
