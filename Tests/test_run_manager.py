@@ -8,7 +8,7 @@ stocklist_df = pd.read_csv('/Users/fanch/Desktop/Titres/eurolist_nom.csv', heade
 
 # Params to get data
 stocklist = sorted(stocklist_df[stocklist_df['EUROLIST'].isin(['A', 'B'])].loc[:, 'StockSymbol'].unique())
-stocklist = [stock for stock in stocklist if stock not in ['APAM.PA', 'ASIT.PA']]
+stocklist = [stock for stock in stocklist if stock not in ['APAM.PA', 'ASIT.PA', 'BOTHE.PA', 'BUR.PA']]
 
 PARAMS = {'homepath': '/Users/fanch/Desktop/Titres',
           'stocklist': stocklist,

@@ -117,13 +117,13 @@ class DataHandler:
                 return None
 
     def check_abc_advise(self, t):
-        if 'achat' in t.lower():
+        if ('achat' in t.lower()) & ('baisse' not in t.lower()):
             return 'Achat'
         elif ('nuage' in t.lower()) | ('consolidation' in t.lower()):
             return 'Conserver'
         elif u'sécurité' in t.lower():
             return 'Vente_Faible'
-        elif u'baissier' in t.lower():
+        elif (u'baissier' in t.lower()) | ('patience' in t.lower()):
             return 'Vente_Forte'
         else:
             return 'Pas de conseil.'
@@ -134,7 +134,7 @@ class DataHandler:
             r = requests.get(url, headers={
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'})
         except requests.exceptions.ConnectionError:
-            r.status_code = "Connection refused"
+            # r.status_code = "Connection refused"
             r = None
 
         if r is not None:
